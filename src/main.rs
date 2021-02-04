@@ -1,3 +1,6 @@
+mod snake;
+mod utils;
+
 extern crate piston;
 extern crate glutin_window;
 extern crate graphics;
@@ -11,18 +14,9 @@ use piston::RenderEvent;
 
 use opengl_graphics::{GlGraphics, OpenGL};
 use graphics::Rectangle;
+use crate::utils::*;
+use crate::snake::Snake;
 
-
-
-// 定义各种颜色
-type Color = [f32;4];
-
-const RED:Color = [1.0, 0.0, 0.0, 1.0];
-const GREEN:Color = [0.0, 1.0, 0.0, 1.0];
-const BLUE:Color = [0.0, 0.0, 1.0, 1.0];
-const WHITE:Color = [1.0; 4];
-const BLACK:Color = [0.0,0.0,0.0,1.0];
-const GREY:Color = [0.2, 0.2, 0.2, 1.0];
 
 // 窗口类，用来初始化窗口
 struct Window{
@@ -49,33 +43,6 @@ impl Window{
 }
 
 
-// 移动的方向
-enum Direction{
-    UP,
-    DOWN,
-    LEFT,
-    RIGHT
-}
-
-struct Snake{
-    head_color:Color,
-    body_color:Color,
-    direction:Direction,
-    body:Vec<(u8,u8)>,
-    head:(u8,u8)
-}
-
-impl Snake{
-    pub fn default()->Self{
-        Snake{
-            head_color:RED,
-            body_color: BLUE,
-            direction: Direction::DOWN,
-            body: vec![(0,1),(0,2)],
-            head: (0, 0)
-        }
-    }
-}
 
 struct Game{
     background_color:Color,
@@ -83,13 +50,7 @@ struct Game{
     snake:Snake
 }
 
-fn get_inner_color(c:Color) ->Color{
-    [c[0]*0.8,c[1]*0.8,c[2]*0.8,c[3]]
-}
-fn get_inner_size(outer:[f64;4],border_size:f64) ->[f64;4]{
-    [outer[0] + border_size ,outer[1] + border_size,
-        outer[2] - border_size * 2.0 ,outer[3] - border_size* 2.0]
-}
+
 
 impl Game{
     pub fn new(b:Color,w:Window)-> Self{
@@ -98,11 +59,9 @@ impl Game{
 
     pub fn render(&self,gl:&mut GlGraphics,r:RenderArgs){
         gl.draw(r.viewport(), |c, g| {
-
             let mut draw = |color:Color,rect:[f64;4]|{
                 Rectangle::new(color).draw(rect,&c.draw_state,c.transform,g);
             };
-
             let pixel_size = self.window_setting.pixels_size as f64;
             let border_size = self.window_setting.border_size as f64;
             // 绘制地图
@@ -111,34 +70,12 @@ impl Game{
 
                     let outer =[pixel_size * i as f64, pixel_size * j as f64, pixel_size , pixel_size ];
                     let inner = get_inner_size(outer,border_size);
-
                     draw(GREY, outer);
                     draw(BLACK, inner);
                 }
             }
-            // 绘制蛇头
-            let head_outer = [pixel_size * self.snake.head.0 as f64,
-                                     pixel_size * self.snake.head.1 as f64,
-                                    pixel_size,pixel_size
-            ];
-            let head_inner = get_inner_size(head_outer,border_size);
-            let header_outer_color = self.snake.head_color;
-            let header_inner_color = get_inner_color(header_outer_color);
-            draw(header_outer_color,head_outer);
-            draw(header_inner_color,head_inner);
-            // 绘制蛇身
-            for pos in self.snake.body.iter() {
-                let (x,y) = *(pos);
-                let body_outer = [pixel_size * x as f64, pixel_size * y as f64,
-                                        pixel_size,pixel_size
-                ];
-                let body_inner = get_inner_size(body_outer,border_size);
-                let body_outer_color = self.snake.body_color;
-                let body_inner_color = get_inner_color(body_outer_color);
-                draw(body_outer_color,body_outer);
-                draw(body_inner_color,body_inner);
-            }
-
+            // 渲染蛇的部分
+            self.snake.render(pixel_size,border_size,draw);
 
         });
     }
