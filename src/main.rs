@@ -19,13 +19,14 @@ use crate::utils::*;
 use crate::snake::{Snake, Direction};
 use std::time::{Instant, Duration};
 use crate::setting::*;
+use rand::Rng;
 
 // 窗口类，用来初始化窗口
 struct Window{
-    x_size:u32,
-    y_size:u32,
-    pixels_size: u32,
-    border_size: u32
+    x_size:i32,
+    y_size:i32,
+    pixels_size: i32,
+    border_size: i32
 }
 
 impl Window{
@@ -33,8 +34,8 @@ impl Window{
         Window{
             x_size: 30,
             y_size: 30,
-            pixels_size: 25,
-            border_size:2
+            pixels_size: 12,
+            border_size:1
         }
     }
     pub fn get_size(&self) ->[u32;2]{
@@ -47,13 +48,15 @@ impl Window{
 enum State{
     MOVING,
     EATING(i8,Instant),
-    GAME_OVER
+    GameOver
 }
 
 
 struct Game{
     background_color:Color,
     window_setting:Window,
+    food_pos:(i32,i32),
+    food_color:Color,
     snake:Snake,
     time_since_move: Instant,
     state:State
@@ -64,6 +67,8 @@ struct Game{
 impl Game{
     pub fn new(b:Color,w:Window)-> Self{
         Game{ background_color: b, window_setting: w,
+            food_pos: (5, 5),
+            food_color: GREEN,
             snake:Snake::default(), time_since_move: Instant::now(), state: State::MOVING }
     }
 
@@ -89,25 +94,71 @@ impl Game{
 
 
     pub fn on_press(&mut self, args: &Button) {
-        match args {
-            Button::Keyboard(key) => { self.on_key(key); }
-            _ => {},
+        match &mut self.state {
+            State::MOVING =>{
+                match args {
+                    Button::Keyboard(key) => { self.on_key(key); }
+                    _ => {},
+                }
+            },
+            _ =>{}
         }
     }
 
     pub fn process(&mut self){
-        // 当前只做移动
-        // 如果还没有到移动时间，就直接返回
-        if self.time_since_move.elapsed() < Duration::from_millis(MOVE_TIME) {
-            return;
+        match &self.state {
+            State::MOVING=>{
+                // 当前只做移动
+                // 如果还没有到移动时间，就直接返回
+                if self.time_since_move.elapsed() < Duration::from_millis(MOVE_TIME) {
+                    return;
+                }
+                // 到了移动时间，就移动
+                self.move_snake();
+                self.time_since_move = Instant::now();
+            },
+            _ =>{
+
+            }
         }
-        // 到了移动时间，就移动
-        self.move_snake();
-        self.time_since_move = Instant::now();
+
     }
 
     fn move_snake(&mut self){
-        let suc= self.snake.snake_move(self.window_setting.x_size,self.window_setting.y_size);
+        let suc= self.snake.snake_move(self.window_setting.x_size,self.window_setting.y_size,&mut self.food_pos);
+        // 如果越界或者撞到身体，则游戏失败
+        if !suc{
+            self.state = State::GameOver;
+        }
+    }
+
+    fn draw_map<F>(&self,c_in:Color,c_out:Color,mut draw:F)
+    where F:FnMut(Color,[f64;4]){
+        let pixel_size = self.window_setting.pixels_size as f64;
+        let border_size = self.window_setting.border_size as f64;
+        // 绘制地图
+        for i in 0..self.window_setting.x_size {
+            for j in 0..self.window_setting.y_size {
+
+                let outer =[pixel_size * i as f64, pixel_size * j as f64, pixel_size , pixel_size ];
+                let inner = get_inner_size(outer,border_size);
+                draw(c_out, outer);
+                draw(c_in, inner);
+            }
+        }
+    }
+    fn draw_food<F>(&self,mut draw:F)
+        where F:FnMut(Color,[f64;4]){
+        let pixel_size = self.window_setting.pixels_size as f64;
+        let border_size = self.window_setting.border_size as f64;
+        let outer = [pixel_size * self.food_pos.0 as f64,
+                            pixel_size * self.food_pos.1 as f64,
+                            pixel_size,pixel_size
+        ];
+        let inner = get_inner_size(outer,border_size);
+        let inner_color = get_inner_color(self.food_color);
+        draw(self.food_color,outer);
+        draw(inner_color,inner);
     }
 
     pub fn render(&self,gl:&mut GlGraphics,r:RenderArgs){
@@ -117,19 +168,18 @@ impl Game{
             };
             let pixel_size = self.window_setting.pixels_size as f64;
             let border_size = self.window_setting.border_size as f64;
-            // 绘制地图
-            for i in 0..self.window_setting.x_size {
-                for j in 0..self.window_setting.y_size {
-
-                    let outer =[pixel_size * i as f64, pixel_size * j as f64, pixel_size , pixel_size ];
-                    let inner = get_inner_size(outer,border_size);
-                    draw(GREY, outer);
-                    draw(BLACK, inner);
+            match &self.state {
+                State::GameOver =>{
+                    self.snake.render(pixel_size,border_size,&mut draw);
+                    self.draw_food(&mut draw);
+                    self.draw_map(DARK,DARK,&mut draw);
+                },
+                _ =>{
+                    self.draw_map(BLACK,GREY,&mut draw);
+                    self.snake.render(pixel_size,border_size,&mut draw);
+                    self.draw_food(&mut draw);
                 }
             }
-            // 渲染蛇的部分
-            self.snake.render(pixel_size,border_size,draw);
-
         });
     }
 }
