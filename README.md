@@ -1,2 +1,2 @@
-# PistonGames
-some games coded by piston
+# Piston-Snake
+用Piston实现的贪吃蛇小游戏
